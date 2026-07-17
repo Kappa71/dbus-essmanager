@@ -19,7 +19,7 @@ from vedbus import VeDbusService
 
 class DBusService:
 
-    def __init__(self, constants):
+    def __init__(self, device_instance):
 
         dbus_conn = (
             dbus.SessionBus()
@@ -32,14 +32,13 @@ class DBusService:
             bus=dbus_conn,
             register=False
         )
-
+        self.service.add_path("/DeviceInstance", device_instance)
         self.service.add_path("/Mgmt/ProcessName", __file__)
         self.service.add_path(
             "/Mgmt/ProcessVersion",
             "Python " + platform.python_version()
         )
 
-        self.service.add_path("/DeviceInstance", constants.DEVICE_INSTANCE)
         self.service.add_path("/ProductId", constants.PRODUCT_ID)
         self.service.add_path("/ProductName", constants.PRODUCT_NAME)
 
