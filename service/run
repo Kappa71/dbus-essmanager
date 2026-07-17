@@ -1,0 +1,7 @@
+#!/bin/sh
+
+exec 2>&1
+
+echo "Starting dbus-essmanager"
+
+exec /usr/bin/python3 /data/dbus-essmanager/main.py
