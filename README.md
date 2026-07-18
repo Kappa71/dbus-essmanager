@@ -26,3 +26,6 @@ svstat /service/dbus-essmanager
 
 run program without service:
 python3 main.py
+
+run manually the service:
+./service/run

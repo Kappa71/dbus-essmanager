@@ -1,0 +1,13 @@
+#!/bin/sh
+
+exec 2>&1
+
+LOG_SCRIPT_DIR="$(CDPATH= cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(CDPATH= cd "$LOG_SCRIPT_DIR/../.." && pwd)"
+SERVICE_NAME="${PROJECT_DIR##*/}"
+
+LOG_DIR="/var/log/$SERVICE_NAME"
+
+mkdir -p "$LOG_DIR"
+
+exec multilog t s153600 n2 "$LOG_DIR"
