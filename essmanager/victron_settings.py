@@ -5,8 +5,10 @@ import dbus
 
 
 SETTINGS_SERVICE = "com.victronenergy.settings"
-MAX_CHARGE_VOLTAGE_PATH = "/Settings/SystemSetup/MaxChargeVoltage"
 BUS_ITEM_INTERFACE = "com.victronenergy.BusItem"
+
+MAX_CHARGE_VOLTAGE_PATH = "/Settings/SystemSetup/MaxChargeVoltage"
+MAX_CHARGE_CURRENT_PATH = "/Settings/SystemSetup/MaxChargeCurrent"
 
 
 class VictronSettings:
@@ -31,20 +33,87 @@ class VictronSettings:
             dbus_interface=BUS_ITEM_INTERFACE,
         )
 
+    def _get_float_setting(
+        self,
+        path: str,
+        name: str,
+        unit: str,
+    ) -> float:
+        """Read a floating-point setting from D-Bus."""
+
+        item = self._get_bus_item(path)
+        value = float(item.GetValue())
+
+        self._logger.debug(
+            "Read %s from D-Bus: %.1f %s",
+            name,
+            value,
+            unit,
+        )
+
+        return value
+
+    def _set_float_setting(
+        self,
+        path: str,
+        name: str,
+        value: float,
+        minimum: float,
+        maximum: float,
+        unit: str,
+    ) -> None:
+        """Write and verify a floating-point setting on D-Bus."""
+
+        value = float(value)
+
+        if not minimum <= value <= maximum:
+            raise ValueError(
+                f"{name} must be between {minimum:.1f} and "
+                f"{maximum:.1f} {unit}, received {value}"
+            )
+
+        item = self._get_bus_item(path)
+
+        result = int(
+            item.SetValue(
+                dbus.Double(value)
+            )
+        )
+
+        if result != 0:
+            raise RuntimeError(
+                f"D-Bus rejected {name}={value:.1f} {unit} "
+                f"with result code {result}"
+            )
+
+        actual_value = self._get_float_setting(
+            path=path,
+            name=name,
+            unit=unit,
+        )
+
+        if actual_value != value:
+            raise RuntimeError(
+                f"{name} verification failed: "
+                f"requested {value:.1f} {unit}, "
+                f"read back {actual_value:.1f} {unit}"
+            )
+
+        self._logger.info(
+            "%s set to %.1f %s",
+            name,
+            actual_value,
+            unit,
+        )
+
     def get_max_charge_voltage(self) -> float:
         """Return the configured DVCC maximum charge voltage."""
 
-        item = self._get_bus_item(MAX_CHARGE_VOLTAGE_PATH)
-        value = item.GetValue()
-
-        voltage = float(value)
-
-        self._logger.debug(
-            "Read MaxChargeVoltage from D-Bus: %.1f V",
-            voltage,
+        return self._get_float_setting(
+            path=MAX_CHARGE_VOLTAGE_PATH,
+            name="MaxChargeVoltage",
+            unit="V",
         )
-
-        return voltage
 
     def set_max_charge_voltage(self, voltage: float) -> None:
         """
@@ -53,40 +122,36 @@ class VictronSettings:
         A value of 0.0 disables the maximum charge voltage override.
         """
 
-        voltage = float(voltage)
-
-        if not 0.0 <= voltage <= 80.0:
-            raise ValueError(
-                f"MaxChargeVoltage must be between 0.0 and 80.0 V, "
-                f"received {voltage}"
-            )
-
-        item = self._get_bus_item(MAX_CHARGE_VOLTAGE_PATH)
-
-        result = int(
-            item.SetValue(
-                dbus.Double(voltage)
-            )
+        self._set_float_setting(
+            path=MAX_CHARGE_VOLTAGE_PATH,
+            name="MaxChargeVoltage",
+            value=voltage,
+            minimum=0.0,
+            maximum=80.0,
+            unit="V",
         )
 
-        if result != 0:
-            raise RuntimeError(
-                f"D-Bus rejected MaxChargeVoltage={voltage:.1f} V "
-                f"with result code {result}"
-            )
+    def get_max_charge_current(self) -> float:
+        """Return the configured DVCC maximum charge current."""
 
-        # Read back the setting so that successful SetValue alone is
-        # not mistaken for a verified write.
-        actual_voltage = self.get_max_charge_voltage()
+        return self._get_float_setting(
+            path=MAX_CHARGE_CURRENT_PATH,
+            name="MaxChargeCurrent",
+            unit="A",
+        )
 
-        if actual_voltage != voltage:
-            raise RuntimeError(
-                f"MaxChargeVoltage verification failed: "
-                f"requested {voltage:.1f} V, "
-                f"read back {actual_voltage:.1f} V"
-            )
+    def set_max_charge_current(self, current: float) -> None:
+        """
+        Set the DVCC maximum charge current.
 
-        self._logger.info(
-            "MaxChargeVoltage set to %.1f V",
-            actual_voltage,
+        A value of 0.0 disables the maximum charge current override.
+        """
+
+        self._set_float_setting(
+            path=MAX_CHARGE_CURRENT_PATH,
+            name="MaxChargeCurrent",
+            value=current,
+            minimum=0.0,
+            maximum=1000.0,
+            unit="A",
         )
