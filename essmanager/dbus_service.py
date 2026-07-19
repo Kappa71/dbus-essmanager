@@ -2,6 +2,7 @@ import logging
 import os
 import platform
 import sys
+from typing import Any, Dict
 
 try:
     import dbus
@@ -23,16 +24,112 @@ from settingsdevice import SettingsDevice
 from vedbus import VeDbusService
 
 
-# Paths exposed by com.victronenergy.essmanager
-MAX_SOC_PATH = "/Settings/MaxSoc"
+# ---------------------------------------------------------------------------
+# Runtime paths exposed by com.victronenergy.essmanager
+# ---------------------------------------------------------------------------
+
 BATTERY_FULL_PATH = "/BatteryFull"
+SOC_FULL_TIMER_PATH = "/SocFullTimer"
+STATE_PATH = "/State"
+STATUS_PATH = "/Status"
 
-# Persistent path exposed by com.victronenergy.settings
-PERSISTENT_MAX_SOC_PATH = "/Settings/EssManager/MaxSoc"
 
-DEFAULT_MAX_SOC = 100.0
-MIN_MAX_SOC = 10.0
-MAX_MAX_SOC = 100.0
+# ---------------------------------------------------------------------------
+# Persistent settings
+#
+# Each entry contains:
+#   path: persistent path in com.victronenergy.settings
+#   service_path: path exposed by com.victronenergy.essmanager
+#   default: default value used when the setting is first created
+#   minimum: minimum accepted value
+#   maximum: maximum accepted value
+#   value_type: Python type used internally
+#   unit: unit used in log messages
+# ---------------------------------------------------------------------------
+
+SETTING_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+    "enable": {
+        "path": "/Settings/EssManager/Enable",
+        "service_path": "/Settings/Enable",
+        "default": 1,
+        "minimum": 0,
+        "maximum": 1,
+        "value_type": int,
+        "unit": "",
+    },
+    "max_soc": {
+        "path": "/Settings/EssManager/MaxSoc",
+        "service_path": "/Settings/MaxSoc",
+        "default": 100.0,
+        "minimum": 10.0,
+        "maximum": 100.0,
+        "value_type": float,
+        "unit": "%",
+    },
+    "soc_hysteresis": {
+        "path": "/Settings/EssManager/SocHysteresis",
+        "service_path": "/Settings/SocHysteresis",
+        "default": 3.0,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "value_type": float,
+        "unit": "%",
+    },
+    "soc_full_voltage": {
+        "path": "/Settings/EssManager/SocFullVoltage",
+        "service_path": "/Settings/SocFullVoltage",
+        "default": 55.1,
+        "minimum": 0.0,
+        "maximum": 80.0,
+        "value_type": float,
+        "unit": "V",
+    },
+    "soc_full_tail_current": {
+        "path": "/Settings/EssManager/SocFullTailCurrent",
+        "service_path": "/Settings/SocFullTailCurrent",
+        "default": 5.0,
+        "minimum": 0.0,
+        "maximum": 1000.0,
+        "value_type": float,
+        "unit": "A",
+    },
+    "soc_full_wait_time": {
+        "path": "/Settings/EssManager/SocFullWaitTime",
+        "service_path": "/Settings/SocFullWaitTime",
+        "default": 30.0,
+        "minimum": 0.0,
+        "maximum": 1440.0,
+        "value_type": float,
+        "unit": "min",
+    },
+    "limit_voltage_idle": {
+        "path": "/Settings/EssManager/LimitVoltageIdle",
+        "service_path": "/Settings/LimitVoltageIdle",
+        "default": 51.2,
+        "minimum": 0.0,
+        "maximum": 80.0,
+        "value_type": float,
+        "unit": "V",
+    },
+    "limit_voltage_floating": {
+        "path": "/Settings/EssManager/LimitVoltageFloating",
+        "service_path": "/Settings/LimitVoltageFloating",
+        "default": 53.6,
+        "minimum": 0.0,
+        "maximum": 80.0,
+        "value_type": float,
+        "unit": "V",
+    },
+    "limit_voltage_absorption": {
+        "path": "/Settings/EssManager/LimitVoltageAbsorption",
+        "service_path": "/Settings/LimitVoltageAbsorption",
+        "default": 55.2,
+        "minimum": 0.0,
+        "maximum": 80.0,
+        "value_type": float,
+        "unit": "V",
+    },
+}
 
 
 class DBusService:
@@ -66,14 +163,15 @@ class DBusService:
         com.victronenergy.settings.
         """
 
-        supported_settings = {
-            "max_soc": [
-                PERSISTENT_MAX_SOC_PATH,
-                DEFAULT_MAX_SOC,
-                MIN_MAX_SOC,
-                MAX_MAX_SOC,
-            ],
-        }
+        supported_settings = {}
+
+        for setting_name, definition in SETTING_DEFINITIONS.items():
+            supported_settings[setting_name] = [
+                definition["path"],
+                definition["default"],
+                definition["minimum"],
+                definition["maximum"],
+            ]
 
         self.settings = SettingsDevice(
             bus=self._dbus_conn,
@@ -81,9 +179,30 @@ class DBusService:
             eventCallback=self._on_persistent_setting_changed,
         )
 
+        self._log_loaded_settings()
+
+    def _log_loaded_settings(self) -> None:
+        """Log all persistent settings loaded at startup."""
+
         self._logger.info(
-            "Persistent MaxSoc loaded: %.1f %%",
+            "Persistent settings loaded: "
+            "Enable=%d, MaxSoc=%.1f %%, SocHysteresis=%.1f %%, "
+            "SocFullVoltage=%.1f V, SocFullTailCurrent=%.1f A, "
+            "SocFullWaitTime=%.1f min",
+            int(self.get_enable()),
             self.get_max_soc(),
+            self.get_soc_hysteresis(),
+            self.get_soc_full_voltage(),
+            self.get_soc_full_tail_current(),
+            self.get_soc_full_wait_time(),
+        )
+
+        self._logger.info(
+            "Persistent voltage limits loaded: "
+            "Idle=%.1f V, Floating=%.1f V, Absorption=%.1f V",
+            self.get_limit_voltage_idle(),
+            self.get_limit_voltage_floating(),
+            self.get_limit_voltage_absorption(),
         )
 
     def _add_management_paths(self, device_instance: int) -> None:
@@ -119,62 +238,99 @@ class DBusService:
             1,
         )
 
-        self.service.add_path(
-            "/State",
-            0,
-        )
-
     def _add_essmanager_paths(self) -> None:
-        """Add paths specific to dbus-essmanager."""
+        """Add settings and runtime paths specific to dbus-essmanager."""
 
-        self.service.add_path(
-            MAX_SOC_PATH,
-            self.get_max_soc(),
-            writeable=True,
-            onchangecallback=self._on_max_soc_changed,
-        )
+        for setting_name, definition in SETTING_DEFINITIONS.items():
+            self.service.add_path(
+                definition["service_path"],
+                self._get_setting(setting_name),
+                writeable=True,
+                onchangecallback=self._create_setting_change_callback(
+                    setting_name
+                ),
+            )
 
+        # Runtime values controlled internally by the state machine.
         self.service.add_path(
             BATTERY_FULL_PATH,
             0,
             writeable=False,
         )
 
-    def _on_max_soc_changed(self, path: str, value: object) -> bool:
-        """
-        Handle a write to /Settings/MaxSoc on the essmanager service.
+        self.service.add_path(
+            SOC_FULL_TIMER_PATH,
+            0.0,
+            writeable=False,
+        )
 
-        Returning True accepts the D-Bus write.
+        self.service.add_path(
+            STATE_PATH,
+            0,
+            writeable=False,
+        )
+
+        self.service.add_path(
+            STATUS_PATH,
+            "Off",
+            writeable=False,
+        )
+
+    def _create_setting_change_callback(self, setting_name: str):
+        """
+        Create the callback used when a setting is written through
+        com.victronenergy.essmanager.
+        """
+
+        def callback(path: str, value: object) -> bool:
+            return self._on_service_setting_changed(
+                setting_name,
+                path,
+                value,
+            )
+
+        return callback
+
+    def _on_service_setting_changed(
+        self,
+        setting_name: str,
+        path: str,
+        value: object,
+    ) -> bool:
+        """
+        Handle writes to settings exposed by the essmanager service.
+
+        Returning True accepts the write.
         Returning False rejects it.
         """
 
         try:
-            max_soc = float(value)
-        except (TypeError, ValueError):
-            self._logger.warning(
-                "Rejected invalid MaxSoc value: %r",
+            normalized_value = self._normalize_setting_value(
+                setting_name,
                 value,
             )
-            return False
-
-        if not MIN_MAX_SOC <= max_soc <= MAX_MAX_SOC:
+        except (TypeError, ValueError) as error:
             self._logger.warning(
-                "Rejected MaxSoc %.1f %%: value must be between "
-                "%.1f and %.1f %%",
-                max_soc,
-                MIN_MAX_SOC,
-                MAX_MAX_SOC,
+                "Rejected value %r for %s: %s",
+                value,
+                path,
+                error,
             )
             return False
 
-        current_value = self.get_max_soc()
+        current_value = self._get_setting(setting_name)
 
-        if current_value != max_soc:
-            self.settings["max_soc"] = max_soc
+        if current_value != normalized_value:
+            self.settings[setting_name] = normalized_value
 
             self._logger.info(
-                "MaxSoc changed through essmanager D-Bus to %.1f %%",
-                max_soc,
+                "%s changed through essmanager D-Bus from %s to %s",
+                self._setting_display_name(setting_name),
+                self._format_setting_value(setting_name, current_value),
+                self._format_setting_value(
+                    setting_name,
+                    normalized_value,
+                ),
             )
 
         return True
@@ -192,15 +348,37 @@ class DBusService:
         external client.
         """
 
-        if setting != "max_soc":
+        if setting not in SETTING_DEFINITIONS:
             return
 
-        max_soc = float(new_value)
+        try:
+            normalized_old_value = self._normalize_setting_value(
+                setting,
+                old_value,
+            )
+            normalized_new_value = self._normalize_setting_value(
+                setting,
+                new_value,
+            )
+        except (TypeError, ValueError) as error:
+            self._logger.warning(
+                "Invalid persistent value received for %s: %s",
+                setting,
+                error,
+            )
+            return
 
         self._logger.info(
-            "Persistent MaxSoc changed from %.1f %% to %.1f %%",
-            float(old_value),
-            max_soc,
+            "Persistent %s changed from %s to %s",
+            self._setting_display_name(setting),
+            self._format_setting_value(
+                setting,
+                normalized_old_value,
+            ),
+            self._format_setting_value(
+                setting,
+                normalized_new_value,
+            ),
         )
 
         # During SettingsDevice construction the essmanager service
@@ -208,47 +386,252 @@ class DBusService:
         if not hasattr(self, "service"):
             return
 
+        service_path = SETTING_DEFINITIONS[setting]["service_path"]
+
         try:
-            current_service_value = float(
-                self.service[MAX_SOC_PATH]
-            )
+            current_service_value = self.service[service_path]
         except KeyError:
             return
 
-        if current_service_value != max_soc:
-            self.service[MAX_SOC_PATH] = max_soc
+        try:
+            normalized_service_value = self._normalize_setting_value(
+                setting,
+                current_service_value,
+            )
+        except (TypeError, ValueError):
+            normalized_service_value = None
 
-    def get_max_soc(self) -> float:
-        """Return the persistent maximum SOC setting."""
+        if normalized_service_value != normalized_new_value:
+            self.service[service_path] = normalized_new_value
 
-        return float(self.settings["max_soc"])
+    def _normalize_setting_value(
+        self,
+        setting_name: str,
+        value: object,
+    ):
+        """Convert and validate a setting value."""
 
-    def set_max_soc(self, max_soc: float) -> None:
-        """
-        Set and persist the maximum SOC.
+        definition = SETTING_DEFINITIONS[setting_name]
+        value_type = definition["value_type"]
 
-        This method is intended for internal application use.
-        """
+        if value_type is int:
+            numeric_value = float(value)
 
-        max_soc = float(max_soc)
+            if not numeric_value.is_integer():
+                raise ValueError(
+                    "value must be an integer"
+                )
 
-        if not MIN_MAX_SOC <= max_soc <= MAX_MAX_SOC:
+            normalized_value = int(numeric_value)
+        else:
+            normalized_value = float(value)
+
+        minimum = definition["minimum"]
+        maximum = definition["maximum"]
+
+        if not minimum <= normalized_value <= maximum:
             raise ValueError(
-                f"MaxSoc must be between {MIN_MAX_SOC:.1f} and "
-                f"{MAX_MAX_SOC:.1f} %, received {max_soc}"
+                f"value must be between {minimum} and {maximum}"
             )
 
-        current_value = self.get_max_soc()
+        return normalized_value
 
-        if current_value == max_soc:
+    def _get_setting(self, setting_name: str):
+        """Return a normalized persistent setting value."""
+
+        return self._normalize_setting_value(
+            setting_name,
+            self.settings[setting_name],
+        )
+
+    def _set_setting(
+        self,
+        setting_name: str,
+        value: object,
+    ) -> None:
+        """Validate and persist a setting value."""
+
+        normalized_value = self._normalize_setting_value(
+            setting_name,
+            value,
+        )
+
+        current_value = self._get_setting(setting_name)
+
+        if current_value == normalized_value:
             return
 
-        self.settings["max_soc"] = max_soc
+        self.settings[setting_name] = normalized_value
 
         self._logger.info(
-            "MaxSoc set internally to %.1f %%",
-            max_soc,
+            "%s set internally from %s to %s",
+            self._setting_display_name(setting_name),
+            self._format_setting_value(setting_name, current_value),
+            self._format_setting_value(
+                setting_name,
+                normalized_value,
+            ),
         )
+
+    @staticmethod
+    def _setting_display_name(setting_name: str) -> str:
+        """Return the public name of a setting."""
+
+        return SETTING_DEFINITIONS[setting_name][
+            "service_path"
+        ].rsplit("/", 1)[-1]
+
+    @staticmethod
+    def _format_setting_value(
+        setting_name: str,
+        value: object,
+    ) -> str:
+        """Format a setting value for log messages."""
+
+        definition = SETTING_DEFINITIONS[setting_name]
+        unit = definition["unit"]
+
+        if definition["value_type"] is int:
+            formatted_value = str(int(value))
+        else:
+            formatted_value = f"{float(value):.1f}"
+
+        if unit:
+            return f"{formatted_value} {unit}"
+
+        return formatted_value
+
+    # ------------------------------------------------------------------
+    # Persistent setting getters and setters
+    # ------------------------------------------------------------------
+
+    def get_enable(self) -> bool:
+        """Return whether ESS Manager control is enabled."""
+
+        return bool(self._get_setting("enable"))
+
+    def set_enable(self, enable: bool) -> None:
+        """Enable or disable all ESS Manager functions."""
+
+        self._set_setting(
+            "enable",
+            1 if enable else 0,
+        )
+
+    def get_max_soc(self) -> float:
+        """Return the maximum battery SOC."""
+
+        return float(self._get_setting("max_soc"))
+
+    def set_max_soc(self, max_soc: float) -> None:
+        """Set and persist the maximum battery SOC."""
+
+        self._set_setting("max_soc", max_soc)
+
+    def get_soc_hysteresis(self) -> float:
+        """Return the SOC hysteresis used to restart charging."""
+
+        return float(self._get_setting("soc_hysteresis"))
+
+    def set_soc_hysteresis(self, hysteresis: float) -> None:
+        """Set and persist the SOC hysteresis."""
+
+        self._set_setting(
+            "soc_hysteresis",
+            hysteresis,
+        )
+
+    def get_soc_full_voltage(self) -> float:
+        """Return the minimum voltage used to detect a full battery."""
+
+        return float(self._get_setting("soc_full_voltage"))
+
+    def set_soc_full_voltage(self, voltage: float) -> None:
+        """Set and persist the full-battery voltage threshold."""
+
+        self._set_setting(
+            "soc_full_voltage",
+            voltage,
+        )
+
+    def get_soc_full_tail_current(self) -> float:
+        """Return the maximum tail current used to detect full charge."""
+
+        return float(
+            self._get_setting("soc_full_tail_current")
+        )
+
+    def set_soc_full_tail_current(self, current: float) -> None:
+        """Set and persist the full-battery tail-current threshold."""
+
+        self._set_setting(
+            "soc_full_tail_current",
+            current,
+        )
+
+    def get_soc_full_wait_time(self) -> float:
+        """Return the full-charge validation time in minutes."""
+
+        return float(
+            self._get_setting("soc_full_wait_time")
+        )
+
+    def set_soc_full_wait_time(self, wait_time: float) -> None:
+        """Set and persist the full-charge validation time."""
+
+        self._set_setting(
+            "soc_full_wait_time",
+            wait_time,
+        )
+
+    def get_limit_voltage_idle(self) -> float:
+        """Return the DVCC voltage limit used in ChargeIdle."""
+
+        return float(
+            self._get_setting("limit_voltage_idle")
+        )
+
+    def set_limit_voltage_idle(self, voltage: float) -> None:
+        """Set and persist the idle DVCC voltage limit."""
+
+        self._set_setting(
+            "limit_voltage_idle",
+            voltage,
+        )
+
+    def get_limit_voltage_floating(self) -> float:
+        """Return the DVCC voltage limit used in floating state."""
+
+        return float(
+            self._get_setting("limit_voltage_floating")
+        )
+
+    def set_limit_voltage_floating(self, voltage: float) -> None:
+        """Set and persist the floating DVCC voltage limit."""
+
+        self._set_setting(
+            "limit_voltage_floating",
+            voltage,
+        )
+
+    def get_limit_voltage_absorption(self) -> float:
+        """Return the DVCC voltage limit used in absorption state."""
+
+        return float(
+            self._get_setting("limit_voltage_absorption")
+        )
+
+    def set_limit_voltage_absorption(self, voltage: float) -> None:
+        """Set and persist the absorption DVCC voltage limit."""
+
+        self._set_setting(
+            "limit_voltage_absorption",
+            voltage,
+        )
+
+    # ------------------------------------------------------------------
+    # Runtime state getters and setters
+    # ------------------------------------------------------------------
 
     def get_battery_full(self) -> bool:
         """Return the current BatteryFull state."""
@@ -278,3 +661,93 @@ class DBusService:
             "BatteryFull changed to %s",
             battery_full,
         )
+
+    def get_soc_full_timer(self) -> float:
+        """Return the current full-charge timer in minutes."""
+
+        return float(
+            self.service[SOC_FULL_TIMER_PATH]
+        )
+
+    def set_soc_full_timer(self, minutes: float) -> None:
+        """
+        Update the full-charge timer internally.
+
+        The value is rounded to two decimal places to avoid unnecessary
+        D-Bus and MQTT updates caused by very small timing differences.
+        """
+
+        new_value = round(max(0.0, float(minutes)), 2)
+        current_value = float(
+            self.service[SOC_FULL_TIMER_PATH]
+        )
+
+        if current_value == new_value:
+            return
+
+        self.service[SOC_FULL_TIMER_PATH] = new_value
+
+    def get_state(self) -> int:
+        """Return the numeric state-machine state."""
+
+        return int(
+            self.service[STATE_PATH]
+        )
+
+    def set_state(self, state: int) -> None:
+        """Update the numeric state-machine state internally."""
+
+        new_value = int(state)
+        current_value = int(
+            self.service[STATE_PATH]
+        )
+
+        if current_value == new_value:
+            return
+
+        self.service[STATE_PATH] = new_value
+
+    def get_status(self) -> str:
+        """Return the human-readable state-machine status."""
+
+        return str(
+            self.service[STATUS_PATH]
+        )
+
+    def set_status(self, status: str) -> None:
+        """Update the human-readable state-machine status."""
+
+        new_value = str(status)
+        current_value = str(
+            self.service[STATUS_PATH]
+        )
+
+        if current_value == new_value:
+            return
+
+        self.service[STATUS_PATH] = new_value
+
+        self._logger.info(
+            "Status changed to %s",
+            new_value,
+        )
+
+    def set_state_and_status(
+        self,
+        state: int,
+        status: str,
+    ) -> None:
+        """Update both the numeric state and its readable description."""
+
+        old_state = self.get_state()
+        old_status = self.get_status()
+
+        self.set_state(state)
+        self.set_status(status)
+
+        if old_state != int(state) and old_status == str(status):
+            self._logger.info(
+                "State changed from %d to %d",
+                old_state,
+                int(state),
+            )

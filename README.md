@@ -29,3 +29,42 @@ python3 main.py
 
 run manually the service:
 ./service/run
+
+Percorsi risultanti
+
+In com.victronenergy.essmanager vedrai:
+
+/Settings/Enable
+/Settings/MaxSoc
+/Settings/SocHysteresis
+/Settings/SocFullVoltage
+/Settings/SocFullTailCurrent
+/Settings/SocFullWaitTime
+/Settings/LimitVoltageIdle
+/Settings/LimitVoltageFloating
+/Settings/LimitVoltageAbsorption
+
+/BatteryFull
+/SocFullTimer
+/State
+/Status
+
+I corrispondenti percorsi persistenti saranno:
+
+/Settings/EssManager/Enable
+/Settings/EssManager/MaxSoc
+/Settings/EssManager/SocHysteresis
+/Settings/EssManager/SocFullVoltage
+/Settings/EssManager/SocFullTailCurrent
+/Settings/EssManager/SocFullWaitTime
+/Settings/EssManager/LimitVoltageIdle
+/Settings/EssManager/LimitVoltageFloating
+/Settings/EssManager/LimitVoltageAbsorption
+
+Per esempio, la modifica MQTT di Enable userà:
+
+W/<portal-id>/settings/0/Settings/EssManager/Enable
+
+con:
+
+{"value": 0}
