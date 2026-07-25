@@ -1,7 +1,14 @@
+"""Read runtime battery values from the Victron system service."""
+
+from __future__ import annotations
+
 import logging
-from typing import Optional
+import math
+from typing import Dict, Optional
 
 import dbus
+
+from essmanager.state_machine import SystemData
 
 
 SYSTEM_SERVICE = "com.victronenergy.system"
@@ -19,20 +26,41 @@ class VictronSystem:
         self,
         bus: Optional[dbus.Bus] = None,
         logger: Optional[logging.Logger] = None,
-    ):
+    ) -> None:
         self._bus = bus or dbus.SystemBus()
         self._logger = logger or logging.getLogger(__name__)
 
-    def _get_bus_item(self, path: str) -> dbus.Interface:
-        dbus_object = self._bus.get_object(
-            SYSTEM_SERVICE,
-            path,
-        )
+        # Cache the D-Bus interfaces because these paths are read
+        # repeatedly during the one-second control loop.
+        self._bus_items: Dict[str, dbus.Interface] = {}
 
-        return dbus.Interface(
-            dbus_object,
-            dbus_interface=BUS_ITEM_INTERFACE,
-        )
+    def _get_bus_item(self, path: str) -> dbus.Interface:
+        """Return a cached D-Bus interface for the requested path."""
+
+        item = self._bus_items.get(path)
+
+        if item is not None:
+            return item
+
+        try:
+            dbus_object = self._bus.get_object(
+                SYSTEM_SERVICE,
+                path,
+            )
+
+            item = dbus.Interface(
+                dbus_object,
+                dbus_interface=BUS_ITEM_INTERFACE,
+            )
+        except dbus.DBusException as exc:
+            raise RuntimeError(
+                f"Unable to access D-Bus path "
+                f"{SYSTEM_SERVICE}{path}: {exc}"
+            ) from exc
+
+        self._bus_items[path] = item
+
+        return item
 
     def _get_float_value(
         self,
@@ -40,14 +68,22 @@ class VictronSystem:
         name: str,
         unit: str,
     ) -> float:
-        """Read a floating-point runtime value from D-Bus."""
+        """Read and validate a floating-point runtime value."""
 
         item = self._get_bus_item(path)
-        raw_value = item.GetValue()
+
+        try:
+            raw_value = item.GetValue()
+        except dbus.DBusException as exc:
+            raise RuntimeError(
+                f"Unable to read {name} from D-Bus path "
+                f"{SYSTEM_SERVICE}{path}: {exc}"
+            ) from exc
 
         if raw_value is None:
             raise RuntimeError(
-                f"{name} is unavailable on D-Bus path {path}"
+                f"{name} is unavailable on D-Bus path "
+                f"{SYSTEM_SERVICE}{path}"
             )
 
         try:
@@ -55,8 +91,14 @@ class VictronSystem:
         except (TypeError, ValueError) as exc:
             raise RuntimeError(
                 f"Invalid {name} value received from D-Bus path "
-                f"{path}: {raw_value!r}"
+                f"{SYSTEM_SERVICE}{path}: {raw_value!r}"
             ) from exc
+
+        if not math.isfinite(value):
+            raise RuntimeError(
+                f"Non-finite {name} value received from D-Bus path "
+                f"{SYSTEM_SERVICE}{path}: {raw_value!r}"
+            )
 
         self._logger.debug(
             "Read %s from D-Bus: %.1f %s",
@@ -101,4 +143,18 @@ class VictronSystem:
             path=BATTERY_CURRENT_PATH,
             name="Battery current",
             unit="A",
+        )
+
+    def read(self) -> SystemData:
+        """
+        Read all battery values required by the state machine.
+
+        Raises RuntimeError if one of the required values is unavailable
+        or invalid. A partial SystemData object is never returned.
+        """
+
+        return SystemData(
+            battery_soc=self.get_battery_soc(),
+            battery_voltage=self.get_battery_voltage(),
+            battery_current=self.get_battery_current(),
         )

@@ -745,9 +745,11 @@ class DBusService:
         self.set_state(state)
         self.set_status(status)
 
-        if old_state != int(state) and old_status == str(status):
+        if old_state != int(state) or old_status != str(status):
             self._logger.info(
-                "State changed from %d to %d",
+                "State changed from %d (%s) to %d (%s)",
                 old_state,
+                old_status,
                 int(state),
+                str(status),
             )

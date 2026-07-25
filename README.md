@@ -68,3 +68,40 @@ W/<portal-id>/settings/0/Settings/EssManager/Enable
 con:
 
 {"value": 0}
+
+
+Architettura definitiva
+                main.py
+                    │
+                    ▼
+             EssManager
+                    │
+      ┌─────────────┼──────────────┐
+      ▼             ▼              ▼
+ DBusService   VictronSystem   VictronSettings
+      ▲
+      │
+      ▼
+ StateMachine
+EssManager
+
+È l'orchestratore.
+
+Ad ogni ciclo (es. ogni secondo):
+
+system = victron_system.read()
+
+settings = dbus_service.read_settings()
+
+result = state_machine.update(
+    settings=settings,
+    system=system,
+)
+
+dbus_service.apply(result)
+
+victron_settings.set_max_charge_voltage(
+    result.target_charge_voltage
+)
+
+Quindi EssManager non contiene alcuna logica, coordina soltanto gli oggetti.
