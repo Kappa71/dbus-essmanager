@@ -9,6 +9,8 @@ from typing import Dict, Optional
 import dbus
 
 from essmanager.state_machine import SystemData
+class DBusValueUnavailableError(RuntimeError):
+    """Raised when a D-Bus value is temporarily unavailable."""
 
 
 SYSTEM_SERVICE = "com.victronenergy.system"
@@ -81,8 +83,15 @@ class VictronSystem:
             ) from exc
 
         if raw_value is None:
-            raise RuntimeError(
+            raise DBusValueUnavailableError(
                 f"{name} is unavailable on D-Bus path "
+                f"{SYSTEM_SERVICE}{path}"
+            )
+
+        # Venus OS represents a temporarily unavailable value as an empty dbus.Array.
+        if isinstance(raw_value, dbus.Array) and len(raw_value) == 0:
+            raise DBusValueUnavailableError(
+                f"{name} is temporarily unavailable on D-Bus path "
                 f"{SYSTEM_SERVICE}{path}"
             )
 

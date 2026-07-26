@@ -13,7 +13,10 @@ from essmanager.state_machine import (
     StateResult,
 )
 from essmanager.victron_settings import VictronSettings
-from essmanager.victron_system import VictronSystem
+from essmanager.victron_system import (
+    DBusValueUnavailableError,
+    VictronSystem,
+)
 
 
 class EssManager:
@@ -36,6 +39,7 @@ class EssManager:
         self._last_state: Optional[int] = None
         self._last_battery_full: Optional[bool] = None
         self._last_soc_full_timer: Optional[float] = None
+        self._system_data_unavailable = False
 
     def update(self) -> bool:
         """
@@ -49,15 +53,36 @@ class EssManager:
             settings = self._read_settings()
             system = self._victron_system.read()
 
+            if self._system_data_unavailable:
+                self._logger.info(
+                    "Victron system data available again; "
+                    "ESS Manager control resumed"
+                )
+                self._system_data_unavailable = False
+
             result = self._state_machine.update(
                 settings=settings,
                 system=system,
             )
 
-            self._apply_state_result(result)
+            self._apply_state_result(
+                result,
+                battery_soc=system.battery_soc,
+                battery_voltage=system.battery_voltage,
+                battery_current=system.battery_current,
+            )
             self._apply_target_charge_voltage(
                 result.target_charge_voltage
             )
+
+        except DBusValueUnavailableError as exc:
+            if not self._system_data_unavailable:
+                self._logger.warning(
+                    "%s; ESS Manager control paused and the current "
+                    "charge voltage limit is left unchanged",
+                    exc,
+                )
+                self._system_data_unavailable = True
 
         except Exception:
             self._logger.exception(
@@ -98,6 +123,9 @@ class EssManager:
     def _apply_state_result(
         self,
         result: StateResult,
+        battery_soc: float,
+        battery_voltage: float,
+        battery_current: float,
     ) -> None:
         """Publish state-machine runtime values on the service D-Bus."""
 
@@ -105,9 +133,13 @@ class EssManager:
 
         if self._last_state != state_value:
             self._logger.info(
-                "ESS Manager state changed: %s (%d)",
+                "ESS Manager state changed: %s (%d), "
+                "SOC %.1f %%, battery %.1f V, %.1f A",
                 result.status,
                 state_value,
+                battery_soc,
+                battery_voltage,
+                battery_current,
             )
 
             self._dbus_service.set_state_and_status(

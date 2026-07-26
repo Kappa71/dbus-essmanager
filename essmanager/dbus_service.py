@@ -60,19 +60,19 @@ SETTING_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "max_soc": {
         "path": "/Settings/EssManager/MaxSoc",
         "service_path": "/Settings/MaxSoc",
-        "default": 100.0,
-        "minimum": 10.0,
-        "maximum": 100.0,
-        "value_type": float,
+        "default": 100,
+        "minimum": 10,
+        "maximum": 100,
+        "value_type": int,
         "unit": "%",
     },
     "soc_hysteresis": {
         "path": "/Settings/EssManager/SocHysteresis",
         "service_path": "/Settings/SocHysteresis",
-        "default": 3.0,
-        "minimum": 0.0,
-        "maximum": 100.0,
-        "value_type": float,
+        "default": 3,
+        "minimum": 1,
+        "maximum": 50,
+        "value_type": int,
         "unit": "%",
     },
     "soc_full_voltage": {
@@ -87,19 +87,19 @@ SETTING_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "soc_full_tail_current": {
         "path": "/Settings/EssManager/SocFullTailCurrent",
         "service_path": "/Settings/SocFullTailCurrent",
-        "default": 5.0,
-        "minimum": 0.0,
-        "maximum": 1000.0,
-        "value_type": float,
+        "default": 5,
+        "minimum": 0,
+        "maximum": 100,
+        "value_type": int,
         "unit": "A",
     },
     "soc_full_wait_time": {
         "path": "/Settings/EssManager/SocFullWaitTime",
         "service_path": "/Settings/SocFullWaitTime",
-        "default": 30.0,
-        "minimum": 0.0,
-        "maximum": 1440.0,
-        "value_type": float,
+        "default": 30,
+        "minimum": 0,
+        "maximum": 1440,
+        "value_type": int,
         "unit": "min",
     },
     "limit_voltage_idle": {
@@ -186,9 +186,9 @@ class DBusService:
 
         self._logger.info(
             "Persistent settings loaded: "
-            "Enable=%d, MaxSoc=%.1f %%, SocHysteresis=%.1f %%, "
-            "SocFullVoltage=%.1f V, SocFullTailCurrent=%.1f A, "
-            "SocFullWaitTime=%.1f min",
+            "Enable=%d, MaxSoc=%d %%, SocHysteresis=%d %%, "
+            "SocFullVoltage=%.1f V, SocFullTailCurrent=%d A, "
+            "SocFullWaitTime=%d min",
             int(self.get_enable()),
             self.get_max_soc(),
             self.get_soc_hysteresis(),
@@ -518,22 +518,22 @@ class DBusService:
             1 if enable else 0,
         )
 
-    def get_max_soc(self) -> float:
+    def get_max_soc(self) -> int:
         """Return the maximum battery SOC."""
 
-        return float(self._get_setting("max_soc"))
+        return int(self._get_setting("max_soc"))
 
-    def set_max_soc(self, max_soc: float) -> None:
+    def set_max_soc(self, max_soc: int) -> None:
         """Set and persist the maximum battery SOC."""
 
         self._set_setting("max_soc", max_soc)
 
-    def get_soc_hysteresis(self) -> float:
+    def get_soc_hysteresis(self) -> int:
         """Return the SOC hysteresis used to restart charging."""
 
-        return float(self._get_setting("soc_hysteresis"))
+        return int(self._get_setting("soc_hysteresis"))
 
-    def set_soc_hysteresis(self, hysteresis: float) -> None:
+    def set_soc_hysteresis(self, hysteresis: int) -> None:
         """Set and persist the SOC hysteresis."""
 
         self._set_setting(
@@ -554,14 +554,14 @@ class DBusService:
             voltage,
         )
 
-    def get_soc_full_tail_current(self) -> float:
+    def get_soc_full_tail_current(self) -> int:
         """Return the maximum tail current used to detect full charge."""
 
-        return float(
+        return int(
             self._get_setting("soc_full_tail_current")
         )
 
-    def set_soc_full_tail_current(self, current: float) -> None:
+    def set_soc_full_tail_current(self, current: int) -> None:
         """Set and persist the full-battery tail-current threshold."""
 
         self._set_setting(
@@ -569,14 +569,14 @@ class DBusService:
             current,
         )
 
-    def get_soc_full_wait_time(self) -> float:
+    def get_soc_full_wait_time(self) -> int:
         """Return the full-charge validation time in minutes."""
 
-        return float(
+        return int(
             self._get_setting("soc_full_wait_time")
         )
 
-    def set_soc_full_wait_time(self, wait_time: float) -> None:
+    def set_soc_full_wait_time(self, wait_time: int) -> None:
         """Set and persist the full-charge validation time."""
 
         self._set_setting(
@@ -695,17 +695,7 @@ class DBusService:
         )
 
     def set_state(self, state: int) -> None:
-        """Update the numeric state-machine state internally."""
-
-        new_value = int(state)
-        current_value = int(
-            self.service[STATE_PATH]
-        )
-
-        if current_value == new_value:
-            return
-
-        self.service[STATE_PATH] = new_value
+        self.service["/State"] = int(state)
 
     def get_status(self) -> str:
         """Return the human-readable state-machine status."""
@@ -715,22 +705,7 @@ class DBusService:
         )
 
     def set_status(self, status: str) -> None:
-        """Update the human-readable state-machine status."""
-
-        new_value = str(status)
-        current_value = str(
-            self.service[STATUS_PATH]
-        )
-
-        if current_value == new_value:
-            return
-
-        self.service[STATUS_PATH] = new_value
-
-        self._logger.info(
-            "Status changed to %s",
-            new_value,
-        )
+        self.service["/Status"] = str(status)
 
     def set_state_and_status(
         self,
@@ -739,17 +714,5 @@ class DBusService:
     ) -> None:
         """Update both the numeric state and its readable description."""
 
-        old_state = self.get_state()
-        old_status = self.get_status()
-
         self.set_state(state)
         self.set_status(status)
-
-        if old_state != int(state) or old_status != str(status):
-            self._logger.info(
-                "State changed from %d (%s) to %d (%s)",
-                old_state,
-                old_status,
-                int(state),
-                str(status),
-            )
