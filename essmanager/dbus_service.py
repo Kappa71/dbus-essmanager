@@ -673,11 +673,11 @@ class DBusService:
         """
         Update the full-charge timer internally.
 
-        The value is rounded to two decimal places to avoid unnecessary
-        D-Bus and MQTT updates caused by very small timing differences.
+        The value is rounded to one decimal place so the exposed D-Bus
+        value changes at most once every six seconds.
         """
 
-        new_value = round(max(0.0, float(minutes)), 2)
+        new_value = round(max(0.0, float(minutes)), 1)
         current_value = float(
             self.service[SOC_FULL_TIMER_PATH]
         )
