@@ -20,6 +20,7 @@ fi
 # Set executable permissions.
 chmod 755 "$SCRIPT_DIR/uninstall.sh"
 chmod 755 "$SCRIPT_DIR/restart.sh"
+chmod 755 "$SCRIPT_DIR/reset-settings.sh"
 chmod 755 "$SCRIPT_DIR/service/run"
 chmod 755 "$SCRIPT_DIR/service/log/run"
 

@@ -105,3 +105,17 @@ victron_settings.set_max_charge_voltage(
 )
 
 Quindi EssManager non contiene alcuna logica, coordina soltanto gli oggetti.
+
+Così hai tre operazioni distinte e comprensibili:
+
+./reset-settings.sh
+
+ripristino delle impostazioni;
+
+./uninstall.sh
+
+disinstallazione conservativa;
+
+./uninstall.sh --purge
+
+rimozione completa senza lasciare configurazioni persistenti.
