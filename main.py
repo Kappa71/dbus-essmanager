@@ -7,12 +7,16 @@ from essmanager.settings import Settings
 from essmanager.logger import setup_logger
 from essmanager.dbus_service import DBusService
 from essmanager.ess_manager import EssManager
+from essmanager.home_assistant_discovery import (
+    HomeAssistantDiscovery,
+)
 from essmanager.state_machine import StateMachine
 from essmanager.victron_settings import VictronSettings
 from essmanager.victron_system import VictronSystem
 
 
 LOOP_INTERVAL_SECONDS = 1
+DISCOVERY_RETRY_INTERVAL_SECONDS = 30
 
 
 def main() -> None:
@@ -27,8 +31,10 @@ def main() -> None:
     # This must happen before any D-Bus connections are created.
     DBusGMainLoop(set_as_default=True)
 
+    device_instance = settings.device_instance
+
     service = DBusService(
-        settings.device_instance,
+        device_instance=device_instance,
         logger=logger,
     )
 
@@ -50,7 +56,52 @@ def main() -> None:
         logger=logger,
     )
 
-    logger.info("Service registered")
+    logger.info(
+        "Service registered with DeviceInstance %d",
+        device_instance,
+    )
+
+    # Publish Home Assistant MQTT discovery information.
+    #
+    # The callback returns True when publication fails, causing GLib
+    # to retry periodically. It returns False after a successful
+    # publication, stopping further retries.
+    def publish_home_assistant_discovery() -> bool:
+        try:
+            portal_id = victron_system.get_portal_id()
+
+            discovery = HomeAssistantDiscovery(
+                portal_id=portal_id,
+                device_instance=device_instance,
+                logger=logger,
+            )
+
+            discovery.publish()
+
+            logger.info(
+                "Home Assistant MQTT discovery active for "
+                "Portal ID %s and DeviceInstance %d",
+                portal_id,
+                device_instance,
+            )
+
+            return False
+
+        except Exception:
+            logger.exception(
+                "Unable to publish Home Assistant MQTT discovery; "
+                "retrying in %d seconds",
+                DISCOVERY_RETRY_INTERVAL_SECONDS,
+            )
+
+            return True
+
+    # Try immediately. If publication fails, schedule periodic retries.
+    if publish_home_assistant_discovery():
+        GLib.timeout_add_seconds(
+            DISCOVERY_RETRY_INTERVAL_SECONDS,
+            publish_home_assistant_discovery,
+        )
 
     # Initial diagnostic readings.
     # MaxChargeCurrent is only read and logged; it is not modified by

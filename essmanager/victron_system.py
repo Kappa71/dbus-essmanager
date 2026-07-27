@@ -19,6 +19,7 @@ BUS_ITEM_INTERFACE = "com.victronenergy.BusItem"
 BATTERY_SOC_PATH = "/Dc/Battery/Soc"
 BATTERY_VOLTAGE_PATH = "/Dc/Battery/Voltage"
 BATTERY_CURRENT_PATH = "/Dc/Battery/Current"
+PORTAL_ID_PATH = "/Serial"
 
 
 class VictronSystem:
@@ -167,3 +168,27 @@ class VictronSystem:
             battery_voltage=self.get_battery_voltage(),
             battery_current=self.get_battery_current(),
         )
+
+    def get_portal_id(self) -> str:
+        """
+        Return the VRM Portal ID used by dbus-flashmq in MQTT topics.
+        """
+
+        item = self._get_bus_item(PORTAL_ID_PATH)
+        value = item.GetValue()
+
+        # An empty dbus.Array indicates that the value is temporarily
+        # unavailable.
+        if isinstance(value, dbus.Array) and len(value) == 0:
+            raise DBusValueUnavailableError(
+                "Portal ID is temporarily unavailable"
+            )
+
+        portal_id = str(value).strip()
+
+        if not portal_id:
+            raise DBusValueUnavailableError(
+                "Portal ID is temporarily unavailable"
+            )
+
+        return portal_id

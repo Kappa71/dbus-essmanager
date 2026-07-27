@@ -19,8 +19,15 @@ if [ -e "$SERVICE_LINK" ]; then
     svc -d "$SERVICE_LINK"
 fi
 
-# Optionally remove all persistent settings.
+# Optionally remove Home Assistant discovery and persistent settings.
 if [ "$PURGE_SETTINGS" = true ]; then
+    python3 "$SCRIPT_DIR/remove_home_assistant_discovery.py"
+
+    if [ "$?" -ne 0 ]; then
+        echo "Home Assistant MQTT discovery could not be removed"
+        exit 1
+    fi
+
     "$SCRIPT_DIR/reset-settings.sh"
 
     if [ "$?" -ne 0 ]; then
