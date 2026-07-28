@@ -1,15 +1,15 @@
 """Main entry point for dbus-essmanager."""
 
-from gi.repository import GLib
 from dbus.mainloop.glib import DBusGMainLoop
+from gi.repository import GLib
 
-from essmanager.settings import Settings
-from essmanager.logger import setup_logger
 from essmanager.dbus_service import DBusService
 from essmanager.ess_manager import EssManager
 from essmanager.home_assistant_discovery import (
     HomeAssistantDiscovery,
 )
+from essmanager.logger import setup_logger
+from essmanager.settings import Settings
 from essmanager.state_machine import StateMachine
 from essmanager.victron_settings import VictronSettings
 from essmanager.victron_system import VictronSystem

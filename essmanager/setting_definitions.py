@@ -1,0 +1,161 @@
+from typing import Any, Dict
+
+
+SETTING_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+    "enable": {
+        "path": "/Settings/EssManager/Enable",
+        "service_path": "/Settings/Enable",
+        "default": 1,
+        "minimum": 0,
+        "maximum": 1,
+        "value_type": int,
+        "unit": "",
+        "home_assistant": {
+            "platform": "switch",
+            "name": "Enable",
+            "unique_id": "ess_manager_enable",
+            "default_entity_id": "switch.ess_manager_enable",
+        },
+    },
+
+    "max_soc": {
+        "path": "/Settings/EssManager/MaxSoc",
+        "service_path": "/Settings/MaxSoc",
+        "default": 100,
+        "minimum": 10,
+        "maximum": 100,
+        "value_type": int,
+        "unit": "%",
+        "home_assistant": {
+            "platform": "number",
+            "name": "Maximum SOC",
+            "unique_id": "ess_manager_max_soc",
+            "default_entity_id": "number.ess_manager_max_soc",
+            "mode": "slider",
+            "entity_category": None,
+        },
+    },
+
+    "soc_hysteresis": {
+        "path": "/Settings/EssManager/SocHysteresis",
+        "service_path": "/Settings/SocHysteresis",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 50,
+        "value_type": int,
+        "unit": "%",
+        "home_assistant": {
+            "platform": "number",
+            "name": "SOC Hysteresis",
+            "unique_id": "ess_manager_soc_hysteresis",
+            "default_entity_id": "number.ess_manager_soc_hysteresis",
+            "mode": "box",
+        },
+    },
+
+    "soc_full_voltage": {
+        "path": "/Settings/EssManager/SocFullVoltage",
+        "service_path": "/Settings/SocFullVoltage",
+        "default": 55.1,
+        "minimum": 0.0,
+        "maximum": 70.0,
+        "value_type": float,
+        "unit": "V",
+        "home_assistant": {
+            "platform": "number",
+            "name": "SOC Full voltage",
+            "unique_id": "ess_manager_soc_full_voltage",
+            "default_entity_id": "number.ess_manager_soc_full_voltage",
+            "mode": "box",
+            "step": 0.1,
+        },
+    },
+
+    "soc_full_tail_current": {
+        "path": "/Settings/EssManager/SocFullTailCurrent",
+        "service_path": "/Settings/SocFullTailCurrent",
+        "default": 5,
+        "minimum": 0,
+        "maximum": 100,
+        "value_type": int,
+        "unit": "A",
+        "home_assistant": {
+            "platform": "number",
+            "name": "SOC Full Tail current",
+            "unique_id": "ess_manager_soc_full_tail_current",
+            "default_entity_id": "number.ess_manager_soc_full_tail_current",
+            "mode": "box",
+        },
+    },
+
+    "soc_full_wait_time": {
+        "path": "/Settings/EssManager/SocFullWaitTime",
+        "service_path": "/Settings/SocFullWaitTime",
+        "default": 30,
+        "minimum": 0,
+        "maximum": 1440,
+        "value_type": int,
+        "unit": "min",
+        "home_assistant": {
+            "platform": "number",
+            "name": "SOC Full Wait time",
+            "unique_id": "ess_manager_soc_full_wait_time",
+            "default_entity_id": "number.ess_manager_soc_full_wait_time",
+            "mode": "box",
+        },
+    },
+
+    "limit_voltage_idle": {
+        "path": "/Settings/EssManager/LimitVoltageIdle",
+        "service_path": "/Settings/LimitVoltageIdle",
+        "default": 51.2,
+        "minimum": 0.0,
+        "maximum": 70.0,
+        "value_type": float,
+        "unit": "V",
+        "home_assistant": {
+            "platform": "number",
+            "name": "ESS Idle voltage",
+            "unique_id": "ess_manager_limit_voltage_idle",
+            "default_entity_id": "number.ess_manager_limit_voltage_idle",
+            "mode": "box",
+            "step": 0.1,
+        },
+    },
+
+    "limit_voltage_floating": {
+        "path": "/Settings/EssManager/LimitVoltageFloating",
+        "service_path": "/Settings/LimitVoltageFloating",
+        "default": 53.6,
+        "minimum": 0.0,
+        "maximum": 70.0,
+        "value_type": float,
+        "unit": "V",
+        "home_assistant": {
+            "platform": "number",
+            "name": "ESS Floating voltage",
+            "unique_id": "ess_manager_limit_voltage_floating",
+            "default_entity_id": "number.ess_manager_limit_voltage_floating",
+            "mode": "box",
+            "step": 0.1,
+        },
+    },
+
+    "limit_voltage_absorption": {
+        "path": "/Settings/EssManager/LimitVoltageAbsorption",
+        "service_path": "/Settings/LimitVoltageAbsorption",
+        "default": 55.2,
+        "minimum": 0.0,
+        "maximum": 70.0,
+        "value_type": float,
+        "unit": "V",
+        "home_assistant": {
+            "platform": "number",
+            "name": "ESS Absorption voltage",
+            "unique_id": "ess_manager_limit_voltage_absorption",
+            "default_entity_id": "number.ess_manager_limit_voltage_absorption",
+            "mode": "box",
+            "step": 0.1,
+        },
+    },
+}

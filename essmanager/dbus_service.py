@@ -2,7 +2,6 @@ import logging
 import os
 import platform
 import sys
-from typing import Any, Dict
 
 try:
     import dbus
@@ -13,6 +12,7 @@ except ImportError:
     )
 
 from essmanager import constants
+from essmanager.setting_definitions import SETTING_DEFINITIONS
 
 
 sys.path.insert(
@@ -32,104 +32,6 @@ BATTERY_FULL_PATH = "/BatteryFull"
 SOC_FULL_TIMER_PATH = "/SocFullTimer"
 STATE_PATH = "/State"
 STATUS_PATH = "/Status"
-
-
-# ---------------------------------------------------------------------------
-# Persistent settings
-#
-# Each entry contains:
-#   path: persistent path in com.victronenergy.settings
-#   service_path: path exposed by com.victronenergy.essmanager
-#   default: default value used when the setting is first created
-#   minimum: minimum accepted value
-#   maximum: maximum accepted value
-#   value_type: Python type used internally
-#   unit: unit used in log messages
-# ---------------------------------------------------------------------------
-
-SETTING_DEFINITIONS: Dict[str, Dict[str, Any]] = {
-    "enable": {
-        "path": "/Settings/EssManager/Enable",
-        "service_path": "/Settings/Enable",
-        "default": 1,
-        "minimum": 0,
-        "maximum": 1,
-        "value_type": int,
-        "unit": "",
-    },
-    "max_soc": {
-        "path": "/Settings/EssManager/MaxSoc",
-        "service_path": "/Settings/MaxSoc",
-        "default": 100,
-        "minimum": 10,
-        "maximum": 100,
-        "value_type": int,
-        "unit": "%",
-    },
-    "soc_hysteresis": {
-        "path": "/Settings/EssManager/SocHysteresis",
-        "service_path": "/Settings/SocHysteresis",
-        "default": 3,
-        "minimum": 1,
-        "maximum": 50,
-        "value_type": int,
-        "unit": "%",
-    },
-    "soc_full_voltage": {
-        "path": "/Settings/EssManager/SocFullVoltage",
-        "service_path": "/Settings/SocFullVoltage",
-        "default": 55.1,
-        "minimum": 0.0,
-        "maximum": 80.0,
-        "value_type": float,
-        "unit": "V",
-    },
-    "soc_full_tail_current": {
-        "path": "/Settings/EssManager/SocFullTailCurrent",
-        "service_path": "/Settings/SocFullTailCurrent",
-        "default": 5,
-        "minimum": 0,
-        "maximum": 100,
-        "value_type": int,
-        "unit": "A",
-    },
-    "soc_full_wait_time": {
-        "path": "/Settings/EssManager/SocFullWaitTime",
-        "service_path": "/Settings/SocFullWaitTime",
-        "default": 30,
-        "minimum": 0,
-        "maximum": 1440,
-        "value_type": int,
-        "unit": "min",
-    },
-    "limit_voltage_idle": {
-        "path": "/Settings/EssManager/LimitVoltageIdle",
-        "service_path": "/Settings/LimitVoltageIdle",
-        "default": 51.2,
-        "minimum": 0.0,
-        "maximum": 80.0,
-        "value_type": float,
-        "unit": "V",
-    },
-    "limit_voltage_floating": {
-        "path": "/Settings/EssManager/LimitVoltageFloating",
-        "service_path": "/Settings/LimitVoltageFloating",
-        "default": 53.6,
-        "minimum": 0.0,
-        "maximum": 80.0,
-        "value_type": float,
-        "unit": "V",
-    },
-    "limit_voltage_absorption": {
-        "path": "/Settings/EssManager/LimitVoltageAbsorption",
-        "service_path": "/Settings/LimitVoltageAbsorption",
-        "default": 55.2,
-        "minimum": 0.0,
-        "maximum": 80.0,
-        "value_type": float,
-        "unit": "V",
-    },
-}
 
 
 class DBusService:
@@ -184,25 +86,17 @@ class DBusService:
     def _log_loaded_settings(self) -> None:
         """Log all persistent settings loaded at startup."""
 
-        self._logger.info(
-            "Persistent settings loaded: "
-            "Enable=%d, MaxSoc=%d %%, SocHysteresis=%d %%, "
-            "SocFullVoltage=%.1f V, SocFullTailCurrent=%d A, "
-            "SocFullWaitTime=%d min",
-            int(self.get_enable()),
-            self.get_max_soc(),
-            self.get_soc_hysteresis(),
-            self.get_soc_full_voltage(),
-            self.get_soc_full_tail_current(),
-            self.get_soc_full_wait_time(),
-        )
+        settings = []
+
+        for setting_name in SETTING_DEFINITIONS:
+            settings.append(
+                f"{self._setting_display_name(setting_name)}="
+                f"{self._format_setting_value(setting_name, self._get_setting(setting_name))}"
+            )
 
         self._logger.info(
-            "Persistent voltage limits loaded: "
-            "Idle=%.1f V, Floating=%.1f V, Absorption=%.1f V",
-            self.get_limit_voltage_idle(),
-            self.get_limit_voltage_floating(),
-            self.get_limit_voltage_absorption(),
+            "Persistent settings loaded: %s",
+            ", ".join(settings),
         )
 
     def _add_management_paths(self, device_instance: int) -> None:
@@ -423,8 +317,12 @@ class DBusService:
                 )
 
             normalized_value = int(numeric_value)
-        else:
+        elif value_type is float:
             normalized_value = float(value)
+        else:
+            raise TypeError(
+                f"unsupported value_type {value_type!r}"
+            )
 
         minimum = definition["minimum"]
         maximum = definition["maximum"]
@@ -695,7 +593,7 @@ class DBusService:
         )
 
     def set_state(self, state: int) -> None:
-        self.service["/State"] = int(state)
+        self.service[STATE_PATH] = int(state)
 
     def get_status(self) -> str:
         """Return the human-readable state-machine status."""
@@ -705,7 +603,7 @@ class DBusService:
         )
 
     def set_status(self, status: str) -> None:
-        self.service["/Status"] = str(status)
+        self.service[STATUS_PATH] = str(status)
 
     def set_state_and_status(
         self,

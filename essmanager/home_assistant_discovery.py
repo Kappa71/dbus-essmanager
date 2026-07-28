@@ -3,6 +3,8 @@ import logging
 import subprocess
 from typing import Any, Dict, Optional
 
+from essmanager.setting_definitions import SETTING_DEFINITIONS
+
 
 DISCOVERY_PREFIX = "homeassistant"
 
@@ -83,123 +85,7 @@ class HomeAssistantDiscovery:
     def _build_payload(self) -> Dict[str, Any]:
         """Build the Home Assistant device discovery payload."""
 
-        components: Dict[str, Dict[str, Any]] = {}
-
-        components["enable"] = self._switch_component(
-            name="Enable",
-            unique_id="ess_manager_enable",
-            default_entity_id="switch.ess_manager_enable",
-            path="Settings/Enable",
-        )
-
-        components["maximum_soc"] = self._integer_number_component(
-            name="Maximum SOC",
-            unique_id="ess_manager_max_soc",
-            default_entity_id="number.ess_manager_max_soc",
-            path="Settings/MaxSoc",
-            minimum=10,
-            maximum=100,
-            mode="slider",
-            unit="%",
-            entity_category=None,
-        )
-
-        components["soc_hysteresis"] = self._integer_number_component(
-            name="SOC Hysteresis",
-            unique_id="ess_manager_soc_hysteresis",
-            default_entity_id="number.ess_manager_soc_hysteresis",
-            path="Settings/SocHysteresis",
-            minimum=1,
-            maximum=50,
-            mode="box",
-            unit="%",
-        )
-
-        components["soc_full_voltage"] = self._float_number_component(
-            name="SOC Full voltage",
-            unique_id="ess_manager_soc_full_voltage",
-            default_entity_id="number.ess_manager_soc_full_voltage",
-            path="Settings/SocFullVoltage",
-            minimum=48.0,
-            maximum=60.0,
-            step=0.1,
-            unit="V",
-        )
-
-        components["soc_full_tail_current"] = (
-            self._integer_number_component(
-                name="SOC Full Tail current",
-                unique_id="ess_manager_soc_full_tail_current",
-                default_entity_id=(
-                    "number.ess_manager_soc_full_tail_current"
-                ),
-                path="Settings/SocFullTailCurrent",
-                minimum=0,
-                maximum=100,
-                mode="box",
-                unit="A",
-            )
-        )
-
-        components["soc_full_wait_time"] = (
-            self._integer_number_component(
-                name="SOC Full Wait time",
-                unique_id="ess_manager_soc_full_wait_time",
-                default_entity_id=(
-                    "number.ess_manager_soc_full_wait_time"
-                ),
-                path="Settings/SocFullWaitTime",
-                minimum=0,
-                maximum=1440,
-                mode="box",
-                unit="min",
-            )
-        )
-
-        components["limit_voltage_idle"] = (
-            self._float_number_component(
-                name="ESS Idle voltage",
-                unique_id="ess_manager_limit_voltage_idle",
-                default_entity_id=(
-                    "number.ess_manager_limit_voltage_idle"
-                ),
-                path="Settings/LimitVoltageIdle",
-                minimum=48.0,
-                maximum=60.0,
-                step=0.1,
-                unit="V",
-            )
-        )
-
-        components["limit_voltage_floating"] = (
-            self._float_number_component(
-                name="ESS Floating voltage",
-                unique_id="ess_manager_limit_voltage_floating",
-                default_entity_id=(
-                    "number.ess_manager_limit_voltage_floating"
-                ),
-                path="Settings/LimitVoltageFloating",
-                minimum=48.0,
-                maximum=60.0,
-                step=0.1,
-                unit="V",
-            )
-        )
-
-        components["limit_voltage_absorption"] = (
-            self._float_number_component(
-                name="ESS Absorption voltage",
-                unique_id="ess_manager_limit_voltage_absorption",
-                default_entity_id=(
-                    "number.ess_manager_limit_voltage_absorption"
-                ),
-                path="Settings/LimitVoltageAbsorption",
-                minimum=48.0,
-                maximum=60.0,
-                step=0.1,
-                unit="V",
-            )
-        )
+        components = self._build_setting_components()
 
         components["status"] = {
             "platform": "sensor",
@@ -277,6 +163,47 @@ class HomeAssistantDiscovery:
             "components": components,
         }
 
+    def _build_setting_components(
+        self,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Build discovery components from shared setting definitions."""
+
+        components: Dict[str, Dict[str, Any]] = {}
+
+        for setting_name, definition in SETTING_DEFINITIONS.items():
+            home_assistant = definition.get("home_assistant")
+
+            if home_assistant is None:
+                continue
+
+            platform = home_assistant["platform"]
+            path = definition["service_path"].lstrip("/")
+
+            if platform == "switch":
+                component = self._switch_component(
+                    name=home_assistant["name"],
+                    unique_id=home_assistant["unique_id"],
+                    default_entity_id=(
+                        home_assistant["default_entity_id"]
+                    ),
+                    path=path,
+                )
+            elif platform == "number":
+                component = self._number_component(
+                    definition=definition,
+                    home_assistant=home_assistant,
+                    path=path,
+                )
+            else:
+                raise ValueError(
+                    "Unsupported Home Assistant platform "
+                    f"{platform!r} for setting {setting_name!r}"
+                )
+
+            components[setting_name] = component
+
+        return components
+
     def _switch_component(
         self,
         name: str,
@@ -299,66 +226,61 @@ class HomeAssistantDiscovery:
             "optimistic": False,
         }
 
-    def _integer_number_component(
+    def _number_component(
         self,
-        name: str,
-        unique_id: str,
-        default_entity_id: str,
+        definition: Dict[str, Any],
+        home_assistant: Dict[str, Any],
         path: str,
-        minimum: int,
-        maximum: int,
-        mode: str,
-        unit: str,
-        entity_category: Optional[str] = "config",
     ) -> Dict[str, Any]:
+        """Build an integer or floating-point number component."""
+
+        value_type = definition["value_type"]
+
+        if value_type is int:
+            value_filter = "int"
+            default_step: Any = 1
+        elif value_type is float:
+            value_filter = "float"
+            default_step = 0.1
+        else:
+            raise ValueError(
+                "Unsupported value_type "
+                f"{value_type!r} for path {definition['service_path']!r}"
+            )
+
         component: Dict[str, Any] = {
             "platform": "number",
-            "name": name,
-            "unique_id": unique_id,
-            "default_entity_id": default_entity_id,
+            "name": home_assistant["name"],
+            "unique_id": home_assistant["unique_id"],
+            "default_entity_id": (
+                home_assistant["default_entity_id"]
+            ),
             "state_topic": self._read_topic(path),
             "command_topic": self._write_topic(path),
-            "value_template": "{{ value_json.value | int }}",
-            "command_template": '{"value":{{ value | int }}}',
-            "min": minimum,
-            "max": maximum,
-            "step": 1,
-            "mode": mode,
-            "unit_of_measurement": unit,
+            "value_template": (
+                f"{{{{ value_json.value | {value_filter} }}}}"
+            ),
+            "command_template": (
+                '{"value":{{ value | '
+                f"{value_filter}"
+                ' }}}'
+            ),
+            "min": definition["minimum"],
+            "max": definition["maximum"],
+            "step": home_assistant.get("step", default_step),
+            "mode": home_assistant.get("mode", "box"),
+            "unit_of_measurement": definition["unit"],
         }
+
+        entity_category = home_assistant.get(
+            "entity_category",
+            "config",
+        )
 
         if entity_category is not None:
             component["entity_category"] = entity_category
 
         return component
-
-    def _float_number_component(
-        self,
-        name: str,
-        unique_id: str,
-        default_entity_id: str,
-        path: str,
-        minimum: float,
-        maximum: float,
-        step: float,
-        unit: str,
-    ) -> Dict[str, Any]:
-        return {
-            "platform": "number",
-            "name": name,
-            "unique_id": unique_id,
-            "default_entity_id": default_entity_id,
-            "state_topic": self._read_topic(path),
-            "command_topic": self._write_topic(path),
-            "value_template": "{{ value_json.value | float }}",
-            "command_template": '{"value":{{ value | float }}}',
-            "min": minimum,
-            "max": maximum,
-            "step": step,
-            "mode": "box",
-            "unit_of_measurement": unit,
-            "entity_category": "config",
-        }
 
     def _read_topic(self, path: str) -> str:
         return f"{self._read_topic_base}/{path}"
