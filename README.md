@@ -20,6 +20,57 @@ Designed for battery systems using Victron DVCC while remaining fully compatible
 
 ---
 
+## Quick Start
+
+### Option 1 – Clone the repository (requires Git)
+
+```bash
+git clone https://github.com/<username>/dbus-essmanager.git
+cd dbus-essmanager
+
+chmod +x install.sh
+./install.sh
+```
+
+### Option 2 – Manual installation (recommended for Venus OS)
+
+Download the latest project archive from GitHub and copy the
+`dbus-essmanager` directory to:
+
+```text
+/data/dbus-essmanager
+```
+
+Then connect to the Venus OS shell and run:
+
+```bash
+cd /data/dbus-essmanager
+
+chmod +x install.sh
+./install.sh
+```
+
+The installer:
+
+- registers the runit service
+- enables automatic startup after reboot
+- starts **dbus-essmanager** immediately
+
+Configuration can then be adjusted through D-Bus, MQTT or Home Assistant
+(using MQTT Discovery).
+
+---
+
+## Installation
+
+Clone the repository into:
+
+```
+/data/dbus-essmanager
+```
+
+---
+
 Warning
 
 This software modifies the Victron DVCC Maximum Charge Voltage automatically.
@@ -38,6 +89,7 @@ Always verify your battery manufacturer's recommended charging limits.
 - Persistent settings stored by `com.victronenergy.settings`
 - Automatic DVCC Maximum Charge Voltage management
 - Configurable maximum battery SOC
+- Automatic full-battery detection
 - Automatic transition between:
   - Charge absorption
   - Charge floating
@@ -86,138 +138,33 @@ Charge Absorption → Charge Idle
 
 without performing full-battery detection.
 
----
+Max SOC = 100%
 
-## Architecture
-
-```
-                main.py
-                    │
-                    ▼
-             EssManager
-                    │
-      ┌─────────────┼──────────────┐
-      ▼             ▼              ▼
- DBusService   VictronSystem   VictronSettings
-      ▲
+Absorption
       │
+      │ Full voltage reached
+      │ Tail current reached
+      │ Wait time elapsed
       ▼
- StateMachine
-```
+Floating
+      │
+      │ SOC < 100 % - Hysteresis
+      ▼
+Absorption
 
-### Responsibilities
 
-**EssManager**
+Max SOC < 100%
 
-Coordinates the complete control loop.
+Absorption
+      │
+      │ SOC >= Max SOC
+      ▼
+Idle
+      │
+      │ SOC <= Max SOC - Hysteresis
+      ▼
+Absorption
 
-Reads:
-
-- battery values
-- configuration
-
-Runs the state machine.
-
-Publishes runtime values.
-
-Updates the Victron DVCC settings.
-
----
-
-**StateMachine**
-
-Contains all charging logic.
-
-Does **not** access D-Bus.
-
-Pure decision engine.
-
----
-
-**DBusService**
-
-Exposes:
-
-- persistent settings
-- runtime values
-
-Handles:
-
-- validation
-- persistence
-- D-Bus communication
-
----
-
-**VictronSystem**
-
-Reads battery information from:
-
-```
-com.victronenergy.system
-```
-
----
-
-**VictronSettings**
-
-Reads and writes:
-
-```
-Settings/SystemSetup/MaxChargeVoltage
-Settings/SystemSetup/MaxChargeCurrent
-```
-
----
-
-## D-Bus interface
-
-### Runtime paths
-
-```
-/BatteryFull
-/SocFullTimer
-/State
-/Status
-```
-
-### Service settings
-
-```
-/Settings/Enable
-/Settings/MaxSoc
-/Settings/SocHysteresis
-/Settings/SocFullVoltage
-/Settings/SocFullTailCurrent
-/Settings/SocFullWaitTime
-/Settings/LimitVoltageIdle
-/Settings/LimitVoltageFloating
-/Settings/LimitVoltageAbsorption
-```
-
-### Persistent settings
-
-```
-/Settings/EssManager/Enable
-/Settings/EssManager/MaxSoc
-/Settings/EssManager/SocHysteresis
-/Settings/EssManager/SocFullVoltage
-/Settings/EssManager/SocFullTailCurrent
-/Settings/EssManager/SocFullWaitTime
-/Settings/EssManager/LimitVoltageIdle
-/Settings/EssManager/LimitVoltageFloating
-/Settings/EssManager/LimitVoltageAbsorption
-```
-
----
-
-## Installation
-
-Clone the repository into:
-
-```
-/data/dbus-essmanager
-```
 
 Install:
 
@@ -333,11 +280,109 @@ the log is printed directly to the terminal.
 
 ---
 
+## Charging settings
+
+The service exposes the following configurable parameters.
+
+### Enable
+
+Enables or disables all dbus-essmanager functionality.
+
+When disabled, the service does not modify the Victron DVCC Maximum Charge
+Voltage.
+
+---
+
+### Maximum SOC
+
+Defines the maximum battery State of Charge.
+
+- **100 %** enables normal charging with full-battery detection.
+- **Below 100 %** the battery is kept around the configured SOC by switching
+  between **Absorption Voltage** and **Idle Voltage**.
+
+---
+
+### SOC Hysteresis
+
+Defines how much the battery SOC must decrease before charging resumes.
+
+Example:
+
+- Maximum SOC = 80 %
+- Hysteresis = 3 %
+
+Charging restarts when the battery reaches **77 % SOC**.
+
+---
+
+### SOC Full Voltage
+
+Minimum battery voltage required before full-battery detection can begin.
+
+The battery voltage must remain above this threshold while the charging current
+is below the configured Tail Current.
+
+---
+
+### SOC Full Tail Current
+
+Maximum charging current required to consider the battery fully charged.
+
+
+---
+
+### SOC Full Wait Time
+
+Time that the full-charge conditions must remain continuously satisfied before
+the battery is considered fully charged.
+
+---
+
+### Absorption Voltage
+
+DVCC Maximum Charge Voltage applied during normal charging.
+
+This is typically the battery manufacturer's recommended absorption voltage.
+
+---
+
+### Floating Voltage
+
+DVCC Maximum Charge Voltage applied after the battery has been detected as
+fully charged.
+
+This lower voltage reduces battery stress while keeping the battery full.
+
+---
+
+### Idle Voltage
+
+DVCC Maximum Charge Voltage applied when the configured Maximum SOC has been
+reached (Maximum SOC < 100%).
+
+This effectively stops further charging while still allowing the battery to
+power the ESS system.
+
+---
+
+### Voltage value of 0 V
+
+For all DVCC voltage settings (**Absorption**, **Floating** and **Idle**):
+
+Setting a value of **0 V** disables the charge-voltage override for that
+operating state.
+
+This allows another DVCC-compatible device (typically the battery BMS) to
+control the charging voltage without limitation from **dbus-essmanager**.
+
+---
+
 ## MQTT
 
 The service uses the standard Venus MQTT topics.
 
-Configuration changes can be performed through:
+Persistent settings can be modified directly through the standard Venus MQTT broker using the following topics:
 
 ```
 W/<portal-id>/settings/0/Settings/EssManager/...
@@ -355,8 +400,9 @@ Example:
 
 ## Home Assistant
 
-The service publishes Home Assistant MQTT Discovery information
-automatically.
+The service publishes Home Assistant MQTT Discovery information automatically.
+
+No YAML configuration is required.
 
 After installation the following entities are created automatically:
 
@@ -382,11 +428,13 @@ The service publishes MQTT Discovery messages to the Venus OS MQTT broker.
 ---
 ### Using the Home Assistant Mosquitto broker
 
-This configuration is only required when Home Assistant uses its own
-Mosquitto broker.
-
-If Home Assistant connects directly to the Venus OS MQTT broker, this bridge
-is not needed.
+> **Note**
+>
+> The following configuration is only required when Home Assistant uses its
+> own Mosquitto broker.
+>
+> If Home Assistant connects directly to the Venus OS MQTT broker, the bridge
+> configuration is not required.
 
 #### 1. Enable custom Mosquitto configuration
 
@@ -516,6 +564,129 @@ starts.
 
 The periodic keepalive keeps the Venus MQTT publication active without forcing
 a complete republish every 30 seconds.
+
+---
+
+## Service Architecture
+
+```
+                main.py
+                    │
+                    ▼
+             EssManager
+                    │
+      ┌─────────────┼──────────────┐
+      ▼             ▼              ▼
+ DBusService   VictronSystem   VictronSettings
+      ▲
+      │
+      ▼
+ StateMachine
+```
+
+### Responsibilities
+
+**EssManager**
+
+Coordinates the complete control loop.
+
+Reads:
+
+- battery values
+- configuration
+
+Runs the state machine.
+
+Publishes runtime values.
+
+Updates the Victron DVCC settings.
+
+---
+
+**StateMachine**
+
+Contains all charging logic.
+
+Does **not** access D-Bus.
+
+Pure decision engine.
+
+---
+
+**DBusService**
+
+Exposes:
+
+- persistent settings
+- runtime values
+
+Handles:
+
+- validation
+- persistence
+- D-Bus communication
+
+---
+
+**VictronSystem**
+
+Reads battery information from:
+
+```
+com.victronenergy.system
+```
+
+---
+
+**VictronSettings**
+
+Reads and writes:
+
+```
+Settings/SystemSetup/MaxChargeVoltage
+Settings/SystemSetup/MaxChargeCurrent
+```
+
+---
+
+## D-Bus interface
+
+### Runtime paths
+
+```
+/BatteryFull
+/SocFullTimer
+/State
+/Status
+```
+
+### Service settings
+
+```
+/Settings/Enable
+/Settings/MaxSoc
+/Settings/SocHysteresis
+/Settings/SocFullVoltage
+/Settings/SocFullTailCurrent
+/Settings/SocFullWaitTime
+/Settings/LimitVoltageIdle
+/Settings/LimitVoltageFloating
+/Settings/LimitVoltageAbsorption
+```
+
+### Persistent settings
+
+```
+/Settings/EssManager/Enable
+/Settings/EssManager/MaxSoc
+/Settings/EssManager/SocHysteresis
+/Settings/EssManager/SocFullVoltage
+/Settings/EssManager/SocFullTailCurrent
+/Settings/EssManager/SocFullWaitTime
+/Settings/EssManager/LimitVoltageIdle
+/Settings/EssManager/LimitVoltageFloating
+/Settings/EssManager/LimitVoltageAbsorption
+```
 
 
 ---
