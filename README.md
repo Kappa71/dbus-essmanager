@@ -3,7 +3,7 @@
 A lightweight D-Bus service for Venus OS that extends Victron ESS with
 configurable battery charging strategies.
 
-The service automatically controls the DVCC Maximum Charge Voltage based on
+The service automatically controls the DVCC Maximum Charge Voltage Limit based on
 battery state, configurable charge limits and user-defined charging policies.
 
 Designed for battery systems using Victron DVCC while remaining fully compatible with the standard Victron ecosystem.
@@ -32,7 +32,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### Option 2 – Manual installation (recommended for Venus OS)
+### Option 2 – Manual installation
 
 Download the latest project archive from GitHub and copy the
 `dbus-essmanager` directory to:
@@ -61,19 +61,9 @@ Configuration can then be adjusted through D-Bus, MQTT or Home Assistant
 
 ---
 
-## Installation
-
-Clone the repository into:
-
-```
-/data/dbus-essmanager
-```
-
----
-
 Warning
 
-This software modifies the Victron DVCC Maximum Charge Voltage automatically.
+This software modifies the Victron DVCC Maximum Charge Voltage Limit automatically.
 It is intended for users who understand the implications of custom battery charging parameters.
 Always verify your battery manufacturer's recommended charging limits.
 
@@ -87,7 +77,7 @@ Always verify your battery manufacturer's recommended charging limits.
 
 - Native D-Bus service
 - Persistent settings stored by `com.victronenergy.settings`
-- Automatic DVCC Maximum Charge Voltage management
+- Automatic DVCC Maximum Charge Voltage Limit management
 - Configurable maximum battery SOC
 - Automatic full-battery detection
 - Automatic transition between:
@@ -117,7 +107,7 @@ The service continuously monitors:
 - Battery voltage
 - Battery current
 
-and automatically updates the DVCC Maximum Charge Voltage according to the
+and automatically updates the DVCC Maximum Charge Voltage Limit according to the
 configured charging strategy.
 
 When the battery reaches the configured full conditions:
@@ -341,7 +331,7 @@ the battery is considered fully charged.
 
 ### Absorption Voltage
 
-DVCC Maximum Charge Voltage applied during normal charging.
+DVCC Maximum Charge Voltage Limit applied during normal charging.
 
 This is typically the battery manufacturer's recommended absorption voltage.
 
@@ -349,7 +339,7 @@ This is typically the battery manufacturer's recommended absorption voltage.
 
 ### Floating Voltage
 
-DVCC Maximum Charge Voltage applied after the battery has been detected as
+DVCC Maximum Charge Voltage Limit applied after the battery has been detected as
 fully charged.
 
 This lower voltage reduces battery stress while keeping the battery full.
@@ -358,7 +348,7 @@ This lower voltage reduces battery stress while keeping the battery full.
 
 ### Idle Voltage
 
-DVCC Maximum Charge Voltage applied when the configured Maximum SOC has been
+DVCC Maximum Charge Voltage Limit applied when the configured Maximum SOC has been
 reached (Maximum SOC < 100%).
 
 This effectively stops further charging while still allowing the battery to
