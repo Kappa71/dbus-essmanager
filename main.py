@@ -42,7 +42,7 @@ def wait_for_victron_system(
             victron_system.get_portal_id()
 
             logger.info(
-                "Victron system service is available"
+                "com.victronenergy.system service is available"
             )
             return
 
@@ -50,7 +50,7 @@ def wait_for_victron_system(
             time.sleep(SYSTEM_READY_POLL_SECONDS)
 
     logger.warning(
-        "Victron system service was not available after %d seconds; "
+        "com.victronenergy.system service was not available after %d seconds; "
         "starting anyway",
         SYSTEM_READY_TIMEOUT_SECONDS,
     )

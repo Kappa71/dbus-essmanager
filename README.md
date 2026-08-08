@@ -683,19 +683,54 @@ Settings/SystemSetup/MaxChargeCurrent
 
 ## Development
 
-Run without installing the service:
+Run the application directly without using the runit service:
 
 ```bash
 python3 main.py
 ```
 
-Run through runit:
+Run the service script manually:
 
 ```bash
 ./service/run
 ```
 
-Reset all persistent settings:
+### Service control
+
+Stop the installed service:
+
+```bash
+svc -d /service/dbus-essmanager
+```
+
+Start the service:
+
+```bash
+svc -u /service/dbus-essmanager
+```
+
+Restart the service:
+
+```bash
+svc -t /service/dbus-essmanager
+```
+
+Check the service status:
+
+```bash
+svstat /service/dbus-essmanager
+```
+
+A normally running service should report something similar to:
+
+```text
+/service/dbus-essmanager: up (pid 1234) 42 seconds
+```
+
+
+### Persistent settings
+
+Reset all persistent settings to their defaults:
 
 ```bash
 ./reset-settings.sh
