@@ -1,5 +1,7 @@
 """Main entry point for dbus-essmanager."""
 
+import time
+
 from dbus.mainloop.glib import DBusGMainLoop
 from gi.repository import GLib
 
@@ -17,6 +19,41 @@ from essmanager.victron_system import VictronSystem
 
 LOOP_INTERVAL_SECONDS = 1
 DISCOVERY_RETRY_INTERVAL_SECONDS = 30
+
+SYSTEM_READY_TIMEOUT_SECONDS = 30
+SYSTEM_READY_POLL_SECONDS = 1
+
+
+def wait_for_victron_system(
+    victron_system: VictronSystem,
+    logger,
+) -> None:
+    """
+    Wait until com.victronenergy.system becomes available.
+
+    During Venus OS startup, dbus-essmanager may start before
+    dbus-systemcalc-py has registered com.victronenergy.system.
+    """
+
+    deadline = time.monotonic() + SYSTEM_READY_TIMEOUT_SECONDS
+
+    while time.monotonic() < deadline:
+        try:
+            victron_system.get_portal_id()
+
+            logger.info(
+                "Victron system service is available"
+            )
+            return
+
+        except Exception:
+            time.sleep(SYSTEM_READY_POLL_SECONDS)
+
+    logger.warning(
+        "Victron system service was not available after %d seconds; "
+        "starting anyway",
+        SYSTEM_READY_TIMEOUT_SECONDS,
+    )
 
 
 def main() -> None:
@@ -59,6 +96,13 @@ def main() -> None:
     logger.info(
         "Service registered with DeviceInstance %d",
         device_instance,
+    )
+
+    # Venus OS services are started independently. Wait for
+    # com.victronenergy.system before performing the initial reads.
+    wait_for_victron_system(
+        victron_system=victron_system,
+        logger=logger,
     )
 
     # Publish Home Assistant MQTT discovery information.
