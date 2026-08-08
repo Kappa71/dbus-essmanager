@@ -13,6 +13,7 @@ except ImportError:
 
 from essmanager import constants
 from essmanager.setting_definitions import SETTING_DEFINITIONS
+from essmanager.version import __version__
 
 
 sys.path.insert(
@@ -110,6 +111,11 @@ class DBusService:
         self.service.add_path(
             "/Mgmt/ProcessName",
             __file__,
+        )
+
+        self.service.add_path(
+            "/SoftwareVersion",
+            __version__,
         )
 
         self.service.add_path(

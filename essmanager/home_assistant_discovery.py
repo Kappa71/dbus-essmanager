@@ -149,6 +149,19 @@ class HomeAssistantDiscovery:
             "entity_category": "diagnostic",
         }
 
+        components["software_version"] = {
+            "platform": "sensor",
+            "name": "Software version",
+            "unique_id": "ess_manager_software_version",
+            "default_entity_id": (
+                "sensor.ess_manager_software_version"
+            ),
+            "state_topic": self._read_topic("SoftwareVersion"),
+            "value_template": "{{ value_json.value }}",
+            "entity_category": "diagnostic",
+            "icon": "mdi:information-outline",
+        }
+        
         return {
             "device": {
                 "identifiers": [self._device_id],
